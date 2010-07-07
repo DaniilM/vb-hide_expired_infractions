@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<product productid="hideexpiredinfractions" active="1">
+	<title>Hide Expired Infractions</title>
+	<description>Hide Expired and Reversed Infractions from Infracted User</description>
+	<version>1.2</version>
+	<url><![CDATA[http://www.vbulletin.org/forum/misc.php?do=producthelp&pid=hideexpiredinfractions]]></url>
+	<versioncheckurl><![CDATA[http://www.vbulletin.org/forum/misc.php?do=productcheck&pid=hideexpiredinfractions]]></versioncheckurl>
+	<dependencies>
+	</dependencies>
+	<codes>
+	</codes>
+	<templates>
+	</templates>
+	<plugins>
+		<plugin active="1" executionorder="5">
+			<title>2. Profile — Remove query modification</title>
+			<hookname>member_infractionbit</hookname>
+			<phpcode><![CDATA[// this is done in the loop so it happens before the userid needs to be used again. :(
+$this->profile->userinfo['userid'] = $saveuserid;]]></phpcode>
+		</plugin>
+		<plugin active="1" executionorder="5">
+			<title>3. Profile — Finish</title>
+			<hookname>member_infraction_complete</hookname>
+			<phpcode><![CDATA[if (!is_numeric($this->profile->userinfo['userid']))
+{
+	$this->profile->userinfo['userid'] = $saveuserid;
+	if ($totalinfractions['count'])
+	{
+		$this->block_data['pagenav'] = construct_page_nav(
+			$pagenumber,
+			$perpage,
+			$totalinfractions['count'],
+			'member.php?' . $this->registry->session->vars['sessionurl'] . "u=" . $this->profile->userinfo['userid'] . "&amp;tab=$id" .
+			(!empty($options['perpage']) ? "&amp;pp=$perpage" : ""), '', $id
+		);
+	}
+	$show['giveinfraction'] = (
+		$this->registry->userinfo['permissions']['genericpermissions'] & $this->registry->bf_ugp_genericpermissions['cangiveinfraction']
+		AND $this->profile->userinfo['userid'] != $this->registry->userinfo['userid']
+		AND !($this->profile->userinfo['permissions']['adminpermissions'] & $this->registry->bf_ugp_adminpermissions['cancontrolpanel'])
+		AND (
+			!($this->profile->userinfo['permissions']['adminpermissions'] & $this->registry->bf_ugp_adminpermissions['ismoderator'])
+			OR $this->registry->userinfo['permissions']['adminpermissions'] & $this->registry->bf_ugp_adminpermissions['cancontrolpanel']
+		)
+	);
+}]]></phpcode>
+		</plugin>
+		<plugin active="1" executionorder="5">
+			<title>1. Profile — Modify query</title>
+			<hookname>member_infraction_start</hookname>
+			<phpcode><![CDATA[$saveuserid = $this->profile->userinfo['userid'];
+if ($this->registry->userinfo['userid'] == $this->profile->userinfo['userid'])
+{
+	// modify the query by piggybacking on the userid :(
+	// 0 = non-exired or permanent infraction, 1 = expired, 2 = reversed
+	if ($this->registry->options['hide_expired_reversed_infractions'] == 0)
+	{
+		// hide expired
+		$this->profile->userinfo['userid'] .= ' AND infraction.action IN(0,2)';
+	}
+	else if ($this->registry->options['hide_expired_reversed_infractions'] == 1)
+	{
+		// hide reversed
+		$this->profile->userinfo['userid'] .= ' AND infraction.action IN(0,1)';
+	}
+	else if ($this->registry->options['hide_expired_reversed_infractions'] == 2)
+	{
+		// hide both expired and reversed
+		$this->profile->userinfo['userid'] .= ' AND infraction.action = 0';
+	}
+}]]></phpcode>
+		</plugin>
+		<plugin active="1" executionorder="5">
+			<title>5. User CP — Finish</title>
+			<hookname>usercp_complete</hookname>
+			<phpcode><![CDATA[if ($infractionbits_new)
+{
+	$infractionbits = $infractionbits_new;
+}
+else
+{
+	$show['infractions'] = false;
+}]]></phpcode>
+		</plugin>
+		<plugin active="1" executionorder="5">
+			<title>5. User CP — Evaluate template</title>
+			<hookname>usercp_infractioninfobit</hookname>
+			<phpcode><![CDATA[// 0 = non-exired or permanent infraction, 1 = expired, 2 = reversed
+// let's leave this nice and verbose so it's easier to read
+if ($vbulletin->options['hide_expired_reversed_infractions'] == 0)
+{
+	// hide expired
+	if ($infraction['action'] == 0 OR $infraction['action'] == 2)
+	{
+		eval('$infractionbits_new .= "' . fetch_template('userinfraction_infobit') . '";');
+	}
+}
+else if ($vbulletin->options['hide_expired_reversed_infractions'] == 1)
+{
+	// hide reversed
+	if ($infraction['action'] == 0 OR $infraction['action'] == 1)
+	{
+		eval('$infractionbits_new .= "' . fetch_template('userinfraction_infobit') . '";');
+	}
+}
+else if ($vbulletin->options['hide_expired_reversed_infractions'] == 2)
+{
+	// hide both expired and reversed
+	if ($infraction['action'] == 0)
+	{
+		eval('$infractionbits_new .= "' . fetch_template('userinfraction_infobit') . '";');
+	}
+}]]></phpcode>
+		</plugin>
+		<plugin active="1" executionorder="5">
+			<title>4. User CP — Initialize variable</title>
+			<hookname>usercp_start</hookname>
+			<phpcode><![CDATA[$infractionbits_new = '';]]></phpcode>
+		</plugin>
+	</plugins>
+	<phrases>
+		<phrasetype name="Control Panel Options" fieldname="cpoption">
+			<phrase name="hide_both_expired_reversed_infractions" date="1243220990" username="sockwater" version="1.1"><![CDATA[Hide both Expired and Reversed Infractions]]></phrase>
+			<phrase name="hide_expired_infractions" date="1243220879" username="sockwater" version="1.1"><![CDATA[Hide Expired Infractions]]></phrase>
+			<phrase name="hide_reversed_infractions" date="1243220947" username="sockwater" version="1.1"><![CDATA[Hide Reversed Infractions]]></phrase>
+		</phrasetype>
+		<phrasetype name="vBulletin Settings" fieldname="vbsettings">
+			<phrase name="setting_hide_expired_reversed_infractions_desc" date="1243221318" username="sockwater" version="1.1"><![CDATA[With this option you can hide expired and reversed infractions from the end user in their User CP and Profile page.<br /><br />This option was added by the "Hide Expired Infractions" product. You can completely remove this option—if you want to show all infractions—by disabling or uninstalling the product.]]></phrase>
+			<phrase name="setting_hide_expired_reversed_infractions_title" date="1243221318" username="sockwater" version="1.1"><![CDATA[Hide Expired and Reversed Infractions]]></phrase>
+		</phrasetype>
+	</phrases>
+	<options>
+		<settinggroup name="userinfraction" displayorder="205">
+			<setting varname="hide_expired_reversed_infractions" displayorder="50">
+				<datatype>integer</datatype>
+				<optioncode>select:piped
+0|hide_expired_infractions
+1|hide_reversed_infractions
+2|hide_both_expired_reversed_infractions</optioncode>
+				<defaultvalue>2</defaultvalue>
+			</setting>
+		</settinggroup>
+	</options>
+	<helptopics>
+	</helptopics>
+	<cronentries>
+	</cronentries>
+	<faqentries>
+	</faqentries>
+</product>
